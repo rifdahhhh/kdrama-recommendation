@@ -18,6 +18,8 @@ drive.mount('/content/drive')
 
 !pip install tensorflow
 
+"""Import library yang dibutuhkan"""
+
 import pandas as pd
 import re
 import string
@@ -32,39 +34,73 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import precision_recall_fscore_support
 
-"""# Data Understanding"""
+"""# Data Understanding
+
+Pada tahap ini, terdapat tiga file CSV yang akan digunakan, yaitu kdrama, reviews, dan actors.
+"""
 
 kdrama = pd.read_csv('/content/drive/MyDrive/Dataset ML/k-drama-rec/korean_drama.csv')
 reviews = pd.read_csv('/content/drive/MyDrive/Dataset ML/k-drama-rec/reviews.csv')
 actors = pd.read_csv('/content/drive/MyDrive/Dataset ML/k-drama-rec/wiki_actors.csv')
 
-"""## K-Drama Variable"""
+"""## K-Drama Variable
+
+Variabel k-drama berisi mengenai informasi mengenai drama korea, seperti nama drama, tahun, sinopsis, dll.
+
+Untuk mengetahui informasi secara umum, kita dapat memanggil fungsi info
+"""
 
 kdrama.info()
 
-"""Ada missing value untuk dataframe kdrama"""
+"""Ada missing value untuk dataframe kdrama yang nanti kita akan tangani di proses data preparation
+
+Untuk mengetahui informasi secara umum, kita dapat memanggil fungsi info
+"""
 
 kdrama.head()
+
+"""lihat isi yang ada pada kolom type"""
 
 print('Banyak Type: ', len(kdrama.type.unique()))
 print('Type: ', kdrama.type.unique())
 
+"""kolom type hanya berisi 1 isi unik yaitu Drama
+
+Lihat isi yang ada pada kolom country
+"""
+
 print('Banyak country: ', len(kdrama.country.unique()))
 print('country: ', kdrama.country.unique())
 
-"""Karena nilai dari type dan country hanya memiliki 1 nilai yang sama untuk semua data, maka kita bisa drop kolom ini nanti.
+"""Ternyata kolom country hanya berisi 1 isi unik yaitu South Korea
+
+Karena nilai dari `type` dan `country` hanya memiliki 1 nilai yang sama untuk semua data, maka kita bisa drop kolom ini nanti.
 
 ## Reviews Variabel
+
+Pada variabel reviews berisi mengenai ulasan dan rating drama korea dari users.
+
+Untuk mengetahui informasi secara umum, kita dapat memanggil fungsi info
 """
 
 reviews.info()
 
+"""Bisa kita lihat bahwa di kolom reviews ada beberapa missing value di beberapa kolom, akan tetapi kita hanya mengambil kolom yang diperlukan."""
+
 reviews.head()
 
-"""## Actors Variable"""
+"""## Actors Variable
+
+Variabel actors berisi mengenai informasi actor korea dan drama yang diperani oleh actor tersebut.
+
+Untuk mengetahui informasi secara umum, kita dapat memanggil fungsi info
+"""
 
 actors.info()
+
+"""tidak terdapat missing value pada variabel actor"""
 
 actors.head()
 
@@ -92,7 +128,7 @@ plt.xticks(np.arange(0, top_actors['drama_count'].max() + 1, 2))
 plt.gca().invert_yaxis()
 plt.show()
 
-"""Aktor Lee Yoo Jin merupakan aktor paling banyak memerankan drama, yaitu sebanyak 18 drama."""
+"""Berdasarkan hasil visualiasi tersebut, aktor Lee Yoo Jin merupakan aktor paling banyak memerankan drama, yaitu sebanyak 18 drama."""
 
 # buat visualisasi jumlah drama yang diproduksi pertahun
 drama_per_tahun = kdrama.groupby('year')['drama_name'].count()
@@ -112,17 +148,25 @@ plt.show()
 
 ## Data Preparation untuk Content-based Filtering
 
+### Siapkan dataframe yang dibutuhkan
+
 Variable yang dibutuhkan untum CBF adalah `kdrama` dan `actors`
+
+lakukan merge variabel kdrama dan actors
 """
 
 # merge kdrama dan actors
 kdrama_info_df = pd.merge(kdrama, actors, on='drama_name', how='left')
 kdrama_info_df.head()
 
+"""drop kolom yang tidak diperlukan"""
+
 # drop kolom yang tidak diperlukan
 columns_to_drop = ['role', 'character_name', 'pop', 'content_rt', 'screenwriter', 'country', 'type', 'start_dt', 'end_dt', 'aired_on', 'org_net', 'rank']
 kdrama_info_df = kdrama_info_df.drop(columns=columns_to_drop, errors='ignore')
 kdrama_info_df.head(10)
+
+"""lakukan grouping pada actor_name menjadi list supaya 1 drama bisa terdapat beberapa aktor dan tidak ada ada duplikasi data, masukkan ke dataframe baru `kdrama_grouped`"""
 
 #  Lakukan grouping pada actors menjadi sebuah list
 kdrama_grouped = kdrama_info_df.groupby('drama_name').agg({
@@ -137,18 +181,22 @@ kdrama_grouped = kdrama_info_df.groupby('drama_name').agg({
 
 kdrama_grouped.head()
 
+"""cek informasi df baru `dataframe_grouped`"""
+
 kdrama_grouped.info()
+
+"""cek missing value pada dataframe baru tersebut"""
 
 # cek missing value
 kdrama_grouped.isnull().sum()
 
 """Berdasarkan pengecekan tersebut, didapat kolom yang terdapat missing value yaitu kolom `director`, `duration`, dan `synopsis`.
 
-Untuk kolom `director` lakukan pengisian dengan string kosong
+Untuk kolom `director` lakukan pengisian dengan **string kosong**
 
-untuk kolom `duration` diisi denan mean
+untuk kolom `duration` diisi denan **mean**
 
-untuk kolom `synopsis` diisi dengan string kosong
+untuk kolom `synopsis` diisi dengan **string kosong**
 """
 
 # Mengatasi Missing value
@@ -171,13 +219,19 @@ kdrama_grouped.describe()
 
 kdrama_grouped.head(10)
 
+"""Dapat dilihat pada dataframe di atas ternyata masih ada nilai `nan` pada kolom actor_name, maka kita akan mengganti nilai tersebut dengan string kosong"""
+
 # Ganti nilai NaN pada actor_name menggunakan string kosong
 kdrama_grouped['actor_name'] = kdrama_grouped['actor_name'].fillna('')
 kdrama_grouped.head()
 
+"""Pada nilai director ada tanda ' dan kita akan hapus tanda kutip tersebut"""
+
 # hapus tanda ' yang ada di kolom director
 kdrama_grouped['director'] = kdrama_grouped['director'].str.replace("'", "")
 kdrama_grouped.head()
+
+"""split isi dari kolom `synopsis` menjadi dipisah per kata"""
 
 # split synopsis
 kdrama_grouped['synopsis'] = kdrama_grouped['synopsis'].apply(lambda x:x.split())
@@ -185,9 +239,13 @@ kdrama_grouped.head(1)
 
 kdrama_grouped.info()
 
+"""kolom `director` belum berupa list, maka kita harus ubah"""
+
 # Ubah kolom 'director' menjadi list
 kdrama_grouped['director'] = kdrama_grouped['director'].apply(lambda x: [x] if isinstance(x, str) else [])
 kdrama_grouped.head()
+
+"""Hapus spasi yang ada pada kolom `actor_name`, `director`, dan `synopsis`"""
 
 # hapus spasi
 kdrama_grouped['actor_name'] = kdrama_grouped['actor_name'].apply(lambda x: [str(i).replace(" ", "") for i in x])
@@ -196,37 +254,98 @@ kdrama_grouped['synopsis'] = kdrama_grouped['synopsis'].apply(lambda x: [str(i).
 
 kdrama_grouped.head()
 
+"""buat kolom baru bernama `tags` yang menyatukan 3 kolom (synopsis, actor_name, dan director)"""
+
 # kelompokkan kolom synopsis, actor_name, dan director ke dalam kolom tags
 kdrama_grouped['tags'] = kdrama_grouped['synopsis'] + kdrama_grouped['actor_name'] + kdrama_grouped['director']
 kdrama_grouped.head(1)
 
+"""lihat tags pada indeks ke 0"""
+
 kdrama_grouped['tags'][0]
 
-# gabungkan semua elemen dari tags ke dalam satu string dengan spasi sebagai pemisah
+"""gabungkan semua elemen dari tags ke dalam satu string dengan spasi sebagai pemisah
+
+"""
+
 kdrama_grouped['tags'] = kdrama_grouped['tags'].apply(lambda x: " ".join(x))
 kdrama_grouped.head(1)
 
+"""bisa dilihat pada kolom tags tersebut sudah menjadi sebuah kesatuan
+
+"""
+
 kdrama_grouped['tags'][0]
+
+"""jika kita perhatikan kolom tags pada indeks ke 0 tersebut masih ada beberapa hal yang perlu kita bersihkan, seperti masih adanya uppercase, ada kata-kata yang tidak diperlukan, dan masih ada tanda baca."""
 
 kdrama_grouped['tags'] = kdrama_grouped['tags'].apply(lambda x:x.lower()) # ubah menjadi lowercase
 kdrama_grouped['tags'] = kdrama_grouped['tags'].apply(lambda x: re.sub(r"\(source:.*?\)", "", x)) # hapus source
 kdrama_grouped['tags'] = kdrama_grouped['tags'].apply(lambda x: x.translate(str.maketrans("", "", string.punctuation)))  # Hapus tanda baca
 kdrama_grouped['tags'][0]
 
+"""Setelah cleaning selesai, buat dataframe baru"""
+
 # buat dataframe kdrama_df
 kdrama_df = kdrama_grouped[["kdrama_id", "drama_name", "tags"]]
 kdrama_df.head()
 
+"""### TF-IDF Vectorizer
+
+Pada tahap ini, kita akan melakukan perhitungan tf-idf pada kolom tags
+"""
+
+# Inisialisasi TfidfVectorizer
+tf = TfidfVectorizer()
+
+# Melakukan perhitungan idf pada data cuisine
+tf.fit(kdrama_df['tags'])
+
+# Mapping array dari fitur index integer ke fitur nama
+tf.get_feature_names_out()
+
+"""ubah teks dalam kolom "tags" pada dataset kdrama_df menjadi representasi vektor menggunakan TF-IDF dan tampilkan ukuran matriks hasil transformasi."""
+
+# Melakukan fit lalu ditransformasikan ke bentuk matrix
+tfidf_matrix = tf.fit_transform(kdrama_df['tags'])
+
+# Melihat ukuran matrix tfidf
+tfidf_matrix.shape
+
+# Mengubah vektor tf-idf dalam bentuk matriks dengan fungsi todense()
+tfidf_matrix.todense()
+
+"""tampilkan sampel kecil dari matriks TF-IDF untuk mempermudah visualisasi"""
+
+# Membuat dataframe untuk melihat tf-idf matrix
+num_cols = tfidf_matrix.shape[1]
+num_rows = tfidf_matrix.shape[0]
+
+num_cols_to_sample = min(22, num_cols)
+num_rows_to_sample = min(10, num_rows)
+
+pd.DataFrame(
+    tfidf_matrix.todense(),
+    columns=tf.get_feature_names_out(),
+    index=kdrama_df.drama_name
+).sample(num_cols_to_sample, axis=1).sample(num_rows_to_sample, axis=0)
+
 """## Data Preparation untuk Collaborative Filtering
+
+### Siapkan dataframe dengan kolom yang dibutuhkan
 
 Pada Collaborative Filtering, hanya akan menggunakan varible reviews dan kdrama (hanya mengambil kolom kdrama_id)
 """
 
 reviews.head()
 
+"""gabungkan dataframe reviews dengan kdrama (hanya mengambil kolom kdrama_id nya saja pada df kdrama)"""
+
 # merge reviews dengan kdrama (mengambil kdrama_id)
 reviews_grouped = pd.merge(reviews, kdrama[['kdrama_id', 'drama_name']], left_on='title', right_on='drama_name', how='left')
 reviews_grouped.head()
+
+"""konversi user_id lalu buat mapping nya supaya dapat dilakukan perhitungan"""
 
 # Mengubah userID menjadi list tanpa nilai yang sama
 user_ids = reviews_grouped['user_id'].unique().tolist()
@@ -244,9 +363,13 @@ print('encoded angka ke user_id: ', user_encoded_to_user)
 reviews_grouped['user_encode'] = reviews_grouped['user_id'].map(user_to_user_encoded)
 reviews_grouped.head()
 
+"""Dapat dilihat terdapat kolom duplikat yang menampung judul drama korea, yaitu pada kolom title dan drama_name, sehingga kita harus drop salah satu kolom tersebut"""
+
 # drop kolom title karena duplikat dati drama_name
 reviews_grouped = reviews_grouped.drop('title', axis=1)
 reviews_grouped.head()
+
+"""Konversi nilai drama dan lakukan mapping supaya bisa dilakukan perhitungan"""
 
 # Mengubah drama menjadi list tanpa nilai yang sama
 dramas = reviews_grouped['kdrama_id'].unique().tolist()
@@ -263,6 +386,8 @@ print('encoded angka ke drama: ', drama_encoded_to_drama)
 # Mapping drama ke dataframe reviews_grouped
 reviews_grouped['kdrama_encode'] = reviews_grouped['kdrama_id'].map(drama_to_drama_encoded)
 reviews_grouped.head()
+
+"""Hitung jumlah user dan cari nilai maksimum dan minimum dari overall_score"""
 
 # Mendapatkan jumlah user
 num_users = len(user_to_user_encoded)
@@ -282,58 +407,51 @@ print('Number of User: {}, Number of drama: {}, Min overall_score: {}, Max overa
     num_users, num_drama, min_overall_score, max_overall_score
 ))
 
+"""Buat dataframe baru dengan kolom yang dibutuhkan"""
+
 # buat dataframe dengan kolom-kolom yang dibutuhkan
 reviews_df = reviews_grouped[['user_id', 'kdrama_id', 'drama_name', 'overall_score', 'user_encode', 'kdrama_encode']]
 reviews_df.head()
 
+"""### Split Data
+
+Membagi data untuk training dan validasi
+"""
+
+# Membuat variabel x untuk mencocokkan data user dan kdrama menjadi satu value
+x = reviews_df[['user_encode', 'kdrama_encode']].values
+
+# Membuat variabel y untuk membuat rating dari hasil
+y = reviews_df['overall_score'].apply(lambda x: (x - min_overall_score) / (max_overall_score - min_overall_score)).values
+
+# Membagi menjadi 80% data train, 10% data validasi, dan 10% data test
+train_indices = int(0.8 * reviews_df.shape[0])
+val_indices = int(0.9 * reviews_df.shape[0])
+x_train, x_val, x_test, y_train, y_val, y_test = (
+    x[:train_indices],
+    x[train_indices:val_indices],
+    x[val_indices:],
+    y[:train_indices],
+    y[train_indices:val_indices],
+    y[val_indices:]
+)
+
+print(x, y)
+
 """# Modeling
 
 ## Content-based Filtering
+
+Setelah menghitung TF-IDF pada tahap data preparation, selanjutnya di modeling CBF ini kita akan hitung terlebih dahulu consine similarity nya
+
+### Cosine Similarity
 """
-
-kdrama_df.head()
-
-"""### TF-IDF Vectorizer
-
-Pada tahap ini, kita akan melakukan perhitungan tf-idf pada kolom tags
-"""
-
-# Inisialisasi TfidfVectorizer
-tf = TfidfVectorizer()
-
-# Melakukan perhitungan idf pada data cuisine
-tf.fit(kdrama_df['tags'])
-
-# Mapping array dari fitur index integer ke fitur nama
-tf.get_feature_names_out()
-
-# Melakukan fit lalu ditransformasikan ke bentuk matrix
-tfidf_matrix = tf.fit_transform(kdrama_df['tags'])
-
-# Melihat ukuran matrix tfidf
-tfidf_matrix.shape
-
-# Mengubah vektor tf-idf dalam bentuk matriks dengan fungsi todense()
-tfidf_matrix.todense()
-
-# Membuat dataframe untuk melihat tf-idf matrix
-num_cols = tfidf_matrix.shape[1]
-num_rows = tfidf_matrix.shape[0]
-
-num_cols_to_sample = min(22, num_cols)
-num_rows_to_sample = min(10, num_rows)
-
-pd.DataFrame(
-    tfidf_matrix.todense(),
-    columns=tf.get_feature_names_out(),
-    index=kdrama_df.drama_name
-).sample(num_cols_to_sample, axis=1).sample(num_rows_to_sample, axis=0)
-
-"""### Cosine Similarity"""
 
 # Menghitung cosine similarity pada matrix tf-idf
 cosine_sim = cosine_similarity(tfidf_matrix)
 cosine_sim
+
+""" tampilkan kemiripan antar drama berdasarkan similarity matrix tersebut"""
 
 # Membuat dataframe dari variabel cosine_sim dengan baris dan kolom berupa nama drama
 cosine_sim_df = pd.DataFrame(cosine_sim, index=kdrama_df['drama_name'], columns=kdrama_df['drama_name'])
@@ -342,7 +460,10 @@ print('Shape:', cosine_sim_df.shape)
 # Melihat similarity matrix pada setiap drama
 cosine_sim_df.sample(5, axis=1).sample(10, axis=0)
 
-"""## Evaluasi CBF: Mendapat rekomendasi"""
+"""### Mendapat Rekomendasi CBF
+
+kita akan coba berikan rekomendasi drama berdasarkan kemiripan yang diberikan dan menampilkan k rekomendasi teratas
+"""
 
 def drama_recommendations(nama_drama, similarity_data=cosine_sim_df, items=kdrama_df[['drama_name', 'tags']], k=5):
     """
@@ -381,39 +502,18 @@ def drama_recommendations(nama_drama, similarity_data=cosine_sim_df, items=kdram
 
     return pd.DataFrame(closest).merge(items).head(k)
 
+"""kita akan menampilkan rekomendasi drama yang mirip dengan kdrama yang berjudul '18 Again'"""
+
 # drop 18 again agar tidak muncul dalam daftar rekomendasi yg diberikan, mau nyari yg mirip sm 18 Again
 kdrama_df[kdrama_df.drama_name.eq('18 Again')]
 
 # Mendapatkan rekomendasi drama yang mirip dengan 18 Again
 drama_recommendations('18 Again')
 
-"""## Collaborative Filtering"""
+"""## Collaborative Filtering
 
-reviews_df.head()
-
-"""### Membagi data untuk training dan validasi"""
-
-# Membuat variabel x untuk mencocokkan data user dan kdrama menjadi satu value
-x = reviews_df[['user_encode', 'kdrama_encode']].values
-
-# Membuat variabel y untuk membuat rating dari hasil
-y = reviews_df['overall_score'].apply(lambda x: (x - min_overall_score) / (max_overall_score - min_overall_score)).values
-
-# Membagi menjadi 80% data train, 10% data validasi, dan 10% data test
-train_indices = int(0.8 * reviews_df.shape[0])
-val_indices = int(0.9 * reviews_df.shape[0])
-x_train, x_val, x_test, y_train, y_val, y_test = (
-    x[:train_indices],
-    x[train_indices:val_indices],
-    x[val_indices:],
-    y[:train_indices],
-    y[train_indices:val_indices],
-    y[val_indices:]
-)
-
-print(x, y)
-
-"""### Training"""
+Pada modeling dengan Collaborative filtering kita akan menggunakan pendekatan Neural Collaborative Filtering (NCF). Kita akan menggunakan RecommenderNet untuk mengimplementasikannya
+"""
 
 class RecommenderNet(tf_lib.keras.Model):
 
@@ -450,6 +550,8 @@ class RecommenderNet(tf_lib.keras.Model):
 
     return tf_lib.nn.sigmoid(x) # activation sigmoid # change tf to tf_lib
 
+"""Inisialisasi model dengan menggunakan Adam optimizer dan RMSE sebagai metrik evaluasi."""
+
 model = RecommenderNet(num_users, num_drama, 50) # inisialisasi model
 
 # model compile
@@ -458,6 +560,8 @@ model.compile(
     optimizer = keras.optimizers.Adam(learning_rate=0.001),
     metrics=[tf_lib.keras.metrics.RootMeanSquaredError()]
 )
+
+"""Lakukan training dengan batch_size bernilai 8 dan 30 epoch"""
 
 # Memulai training
 
@@ -469,7 +573,12 @@ history = model.fit(
     validation_data = (x_val, y_val)
 )
 
-"""## Evaluation Collaborative Filtering"""
+"""# Evaluasi
+
+## Evaluasi CF
+
+Evaluasi Collaborative Filtering (CF) dengan menggunakan Root Mean Squared Error (RMSE)
+"""
 
 # Evaluasi pada data validasi
 val_loss, val_rmse = model.evaluate(x_val, y_val)
@@ -481,7 +590,10 @@ test_loss, test_rmse = model.evaluate(x_test, y_test)
 print(f"Test Loss: {test_loss:.4f}")
 print(f"Test RMSE: {test_rmse:.4f}")
 
-"""### Visualisasi Metrik"""
+"""### Visualisasi Metrik
+
+Buat visualiasi dari hasil evaluasi supaya lebih mudah dibaca
+"""
 
 import matplotlib.pyplot as plt
 
@@ -493,7 +605,10 @@ plt.xlabel('epoch')
 plt.legend(['train', 'test'], loc='upper left')
 plt.show()
 
-"""### Mendapatkan rekomendasi drama"""
+"""### Mendapatkan rekomendasi drama hasil CF
+
+Siapkan data pengguna dan drama yg belum ditonton untuk mendapat rekomendasi dengan CF
+"""
 
 drama_df = kdrama_df
 
@@ -511,6 +626,8 @@ user_encoder = user_to_user_encoded.get(user_id)
 user_drama_array = np.hstack(
     ([[user_encoder]] * len(drama_not_watched), drama_not_watched)
 )
+
+"""Berikan rekomendasi drama berdasarkan ulasan pengguna, dengan menampilkan drama yang telah ditonton dan rekomendasi drama lainnya yang sesuai dengan preferensi pengguna"""
 
 reviews_model = model.predict(user_drama_array).flatten()
 
@@ -556,3 +673,37 @@ print("----" * 8)
 print("Top 10 dramas recommendation")
 print("----" * 8)
 df_recommended_dramas
+
+"""## Evaluasi CBF
+
+Evaluasi CBF menggunakan metriks evaluasi precision, recall, dan F1-score untuk mengukur performa model berdasarkan prediksi yang dihasilkan dari cosine similarity dan ground truth.
+
+Tentukan nilai threshold untuk menghitung matriks ground_truth berdasarkan nilai cosine similarity. Jika ada dua kdrama yang memiliki nilai similarity lebih besar atau sama dengan threshold yang ditentukan, maka keduanya dianggap relevan (diberi label 1 dalam matriks ground_truth).
+"""
+
+threshold = 0.6
+
+ground_truth = np.where(cosine_sim >= threshold, 1, 0)
+
+ground_truth_df = pd.DataFrame(ground_truth, index=kdrama_df['drama_name'], columns=kdrama_df['drama_name']).sample(15, axis=1).sample(15, axis=0)
+
+"""ambil subset dari matriks cosine_sim dan ground_truth sebanyak 10.000 data, meratakannya menjadi array satu dimensi, dan kemudian membandingkannya dengan threshold untuk menghasilkan prediksi biner. Prediksi ini kemudian dievaluasi menggunakan metrik precision, recall, dan F1-score untuk mengukur performa model."""
+
+sample_size = 10000
+cosine_sim_sample = cosine_sim[:sample_size, :sample_size]
+ground_truth_sample = ground_truth[:sample_size, :sample_size]
+
+cosine_sim_flat = cosine_sim_sample.flatten()
+
+ground_truth_flat = ground_truth_sample.flatten()
+
+predictions = (cosine_sim_flat >= threshold).astype(int)
+precision, recall, f1, _ = precision_recall_fscore_support(
+     ground_truth_flat, predictions, average='binary', zero_division=1
+)
+
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1-score:", f1)
+
+"""Berdarkan metriks evaluasi tersebut, model memiliki performa yang sangat baik, dengan precision, recall, dan F1-score semuanya mencapai 1.0, yang menunjukkan bahwa model memberikan rekomendasi dengan sangat baik tanpa kesalahan atau false positive/negative."""

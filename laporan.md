@@ -200,6 +200,18 @@ Untuk metode Content-Based Filtering, variabel yang digunakan adalah `kdrama` da
    ```
     Dengan penggabungan ini, fitur-fitur penting untuk pencocokan berbasis konten tersimpan dalam satu kolom.
 
+5. **Penerapan TF-IDF Vectorizer**
+    Pada tahap ini, digunakan teknik TF-IDF (Term Frequency - Inverse Document Frequency) untuk mengubah data dalam kolom `tags` menjadi representasi numerik:
+
+    ```python
+    from sklearn.feature_extraction.text import TfidfVectorizer
+
+    tf = TfidfVectorizer()
+    tf.fit(kdrama_df['tags'])
+    tfidf_matrix = tf.fit_transform(kdrama_df['tags'])
+    tfidf_matrix.todense()
+    ```
+
 ### Data Preparation untuk Collaborative Filtering
 Pada metode Collaborative Filtering, hanya variabel `reviews` dan `kdrama` (dengan `kdrama_id`) yang digunakan. Berikut langkah-langkahnya:
 
@@ -255,6 +267,22 @@ Pada metode Collaborative Filtering, hanya variabel `reviews` dan `kdrama` (deng
    ```
     Hanya kolom esensial yang disimpan agar model bisa fokus pada hubungan antara pengguna dan drama.
 
+5. **Pembagian Data**
+    Dataset dibagi menjadi tiga bagian: 80% untuk data latih, 10% untuk validasi, dan 10% untuk pengujian:
+
+    ```python
+    x = reviews_df[['user_encode', 'kdrama_encode']].values
+    y = reviews_df['overall_score'].apply(lambda x: (x - min_overall_score) / (max_overall_score - min_overall_score)).values
+
+    train_indices = int(0.8 * reviews_df.shape[0])
+    val_indices = int(0.9 * reviews_df.shape[0])
+    x_train, x_val, x_test, y_train, y_val, y_test = (
+        x[:train_indices], x[train_indices:val_indices], x[val_indices:],
+        y[:train_indices], y[train_indices:val_indices], y[val_indices:]
+    )
+    ```
+
+
 Dengan tahapan ini, data telah siap digunakan untuk membangun model rekomendasi menggunakan Content-Based Filtering dan Collaborative Filtering.
 
 
@@ -271,19 +299,7 @@ Pada tahap ini, sistem rekomendasi dikembangkan menggunakan dua pendekatan yang 
 ### 1. Content-Based Filtering (CBF)
 Pendekatan Content-Based Filtering digunakan dengan memanfaatkan informasi dari konten drama, dalam hal ini tag yang menggambarkan karakteristik dari setiap drama.
 
-#### a. Penerapan TF-IDF Vectorizer
-Pada tahap ini, digunakan teknik TF-IDF (Term Frequency - Inverse Document Frequency) untuk mengubah data dalam kolom `tags` menjadi representasi numerik:
-
-```python
-from sklearn.feature_extraction.text import TfidfVectorizer
-
-tf = TfidfVectorizer()
-tf.fit(kdrama_df['tags'])
-tfidf_matrix = tf.fit_transform(kdrama_df['tags'])
-tfidf_matrix.todense()
-```
-
-#### b. Perhitungan Cosine Similarity
+#### a. Perhitungan Cosine Similarity
 Setelah memperoleh representasi vektor dari tag drama, dihitung kemiripan antar-drama menggunakan Cosine Similarity:
 
 ```python
@@ -292,7 +308,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 cosine_sim = cosine_similarity(tfidf_matrix)
 ```
 
-#### c. Implementasi Fungsi Rekomendasi
+#### b. Implementasi Fungsi Rekomendasi
 Fungsi berikut digunakan untuk memberikan rekomendasi drama berdasarkan kemiripan tag:
 
 ```python
@@ -314,34 +330,20 @@ drama_recommendations('18 Again')
 ```
 
 Hasil rekomendasi menggunakan Content-Based Filtering ditampilkan pada gambar berikut:
+
 ![Hasil rekomendasi cbf](img/hasil_cbf.png)
 
 ### 2. Collaborative Filtering (CF)
 Pendekatan Collaborative Filtering digunakan untuk memberikan rekomendasi berdasarkan interaksi pengguna dengan drama. Model ini menggunakan data rating pengguna dari `reviews_df` yang telah diproses sebelumnya.
 
-#### a. Pembagian Data
-Dataset dibagi menjadi tiga bagian: 80% untuk data latih, 10% untuk validasi, dan 10% untuk pengujian:
-
-```python
-x = reviews_df[['user_encode', 'kdrama_encode']].values
-y = reviews_df['overall_score'].apply(lambda x: (x - min_overall_score) / (max_overall_score - min_overall_score)).values
-
-train_indices = int(0.8 * reviews_df.shape[0])
-val_indices = int(0.9 * reviews_df.shape[0])
-x_train, x_val, x_test, y_train, y_val, y_test = (
-    x[:train_indices], x[train_indices:val_indices], x[val_indices:],
-    y[:train_indices], y[train_indices:val_indices], y[val_indices:]
-)
-```
-
-#### b. Pembangunan Model
+#### a. Pembangunan Model
 Model dibuat menggunakan RecommenderNet dengan embedding sebanyak 50 dimensi:
 
 ```python
 model = RecommenderNet(num_users, num_drama, 50)  # Inisialisasi model
 ```
 
-#### c. Pelatihan Model
+#### b. Pelatihan Model
 Model dilatih menggunakan data latih dengan batch size 8 dan 30 epoch:
 
 ```python
@@ -354,7 +356,7 @@ history = model.fit(
 )
 ```
 
-#### d. Hasil Rekomendasi
+#### c. Hasil Rekomendasi
 Hasil rekomendasi drama berdasarkan Collaborative Filtering ditampilkan pada gambar berikut:
 ![Hasil rekomendasi cf](img/hasil_cf.png)
 
@@ -376,27 +378,45 @@ Ingatlah, metrik evaluasi yang digunakan harus sesuai dengan konteks data, probl
 **Rubrik/Kriteria Tambahan (Opsional)**: 
 - Menjelaskan formula metrik dan bagaimana metrik tersebut bekerja. -->
 
+### 1. Evaluasi Collaborative Filtering
 Model Collaborative Filtering dievaluasi menggunakan metrik **Root Mean Squared Error (RMSE)** untuk mengukur seberapa akurat model dalam memprediksi skor drama berdasarkan data pengguna. RMSE dihitung dengan rumus berikut:  
 
 ![RMSE Formula](img/rmse_formula.png)
 
 di mana y(i) adalah nilai sebenarnya, ŷ(i) adalah nilai prediksi, dan N adalah jumlah sampel. Semakin rendah nilai RMSE, semakin baik model dalam memprediksi data dengan kesalahan yang lebih kecil.  
 
-### **Hasil Evaluasi**  
+#### **Hasil Evaluasi**  
 Berdasarkan hasil evaluasi, model menunjukkan performa yang stabil dengan tren **penurunan RMSE**, yang berarti model semakin baik dalam melakukan prediksi. Berikut adalah hasil evaluasi pada data latih, validasi, dan uji:  
 
 - **Training Loss:** 0.6481  
 - **Training RMSE:** 0.3187  
-- **Validation Loss:** 0.6353  
-- **Validation RMSE:** 0.3099  
-- **Test Loss:** 0.6602  
-- **Test RMSE:** 0.3277  
+- **Validation Loss:** 0.6347 
+- **Validation RMSE:** 0.3096  
+- **Test Loss:** 0.6609  
+- **Test RMSE:** 0.3281
 
-### Visualisasi Metriks
+#### Visualisasi Metriks
 
 ![Visualisasi metrik hasil evaluasi CF](img/metrik_evaluasi_cf.png)
 
 Berdasarkan hasil visualisasi, dapat disimpulkan bahwa model menunjukkan penurunan RMSE yang stabil, menandakan peningkatan kemampuan model dalam memprediksi skor drama berdasarkan data yang diberikan. Selain itu, tidak terdapat indikasi overfitting yang ekstrem, karena RMSE pada data uji juga mengalami penurunan, meskipun tetap lebih tinggi dibandingkan dengan RMSE pada data latih.
+
+
+### 2. Evaluasi Content-Based Filtering
+
+Pada evaluasi Collaborative Filtering (CBF), metrik yang digunakan adalah **precision**, **recall**, dan **F1-score**. Ketiga metrik ini digunakan untuk mengukur performa model dalam memberikan rekomendasi yang akurat berdasarkan nilai cosine similarity antar item (dalam hal ini, drama Korea). 
+
+- **Precision** mengukur seberapa banyak rekomendasi yang relevan dari seluruh rekomendasi yang diberikan. Formula precision adalah:  
+  ![Precision Formula](img/precision-formula.png)
+- **Recall** mengukur seberapa banyak rekomendasi relevan yang berhasil ditemukan dari seluruh data yang relevan. Formula recall adalah:  
+  ![Recall Formula](img/recall_formula.png)
+- **F1-score** adalah rata-rata harmonis dari precision dan recall, yang memberikan gambaran yang lebih menyeluruh tentang keseimbangan antara keduanya. Formula F1-score adalah:  
+  ![f1-score Formula](img/f1_formula.png)
+
+Pada evaluasi ini, threshold yang digunakan untuk menentukan relevansi adalah 0.6, yang berarti pasangan kdrama dianggap relevan jika nilai cosine similarity mereka lebih besar atau sama dengan 0.6.
+
+**Hasil Evaluasi**  
+Berdasarkan hasil evaluasi menggunakan metrik-metrik tersebut, model menunjukkan performa yang sangat baik. Semua nilai **precision**, **recall**, dan **F1-score** mencapai **1.0**, yang berarti model berhasil memberikan rekomendasi yang akurat tanpa kesalahan dalam klasifikasi (tidak ada false positive atau false negative). Hasil ini mengindikasikan bahwa model berhasil memprediksi relevansi kdrama secara sempurna.
 
 
 
